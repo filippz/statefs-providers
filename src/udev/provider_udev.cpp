@@ -17,6 +17,8 @@
 namespace asio = boost::asio;
 namespace udevpp = cor::udevpp;
 
+using statefs::PropertyStatus;
+
 namespace statefs { namespace udev {
 
 static std::string str_or_default(char const *v, char const *defval)
@@ -345,7 +347,7 @@ BatteryNs::BatteryNs()
 {
     auto analog_setter = [](std::string const &v) {
         throw cor::Error("Analog property can't be set");
-        return statefs::PropertyUnchanged;
+        return PropertyStatus::Unchanged;
     };
     //*this << DiscreteProperty("");
     for (size_t i = 0; i < prop_count; ++i) {
