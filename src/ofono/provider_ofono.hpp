@@ -18,6 +18,7 @@
 #include <statefs/property.hpp>
 #include <statefs/qt/ns.hpp>
 #include <qtaround/dbus.hpp>
+#include <cor/util.hpp>
 
 #include <QDBusConnection>
 #include <QString>
@@ -42,6 +43,7 @@ using qtaround::dbus::ServiceWatch;
 
 enum class Interface {
     AssistedSatelliteNavigation,
+    First_ = AssistedSatelliteNavigation,
     AudioSettings,
     CallBarring,
     CallForwarding,
@@ -64,11 +66,10 @@ enum class Interface {
     SupplementaryServices,
     TextTelephony,
     VoiceCallManager,
-
-    EOE
+    Last_ = VoiceCallManager
 };
 
-enum class SimPresent { Unknown, No, Yes, EOE };
+enum class SimPresent { Unknown, No, Yes, Last_ = Yes };
 
 struct ConnectionCache
 {
@@ -76,9 +77,10 @@ struct ConnectionCache
     QVariantMap properties;
 };
 
-typedef std::bitset<(size_t)Interface::EOE> interfaces_set_type;
+typedef std::bitset<cor::enum_size<Interface>()> interfaces_set_type;
 
 class MainNs;
+enum class State;
 
 class Bridge : public QObject, public statefs::qt::PropertiesSource
 {
@@ -95,7 +97,7 @@ public:
 
     enum class Status {
         Offline, Registered, Searching, Denied, Unknown, Roaming
-            , EOE
+            , Last_ = Roaming
             };
 
     void set_status(Status);
