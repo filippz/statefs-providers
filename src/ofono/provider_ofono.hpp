@@ -71,6 +71,28 @@ enum class Interface {
 
 enum class SimPresent { Unknown, No, Yes, Last_ = Yes };
 
+enum class Property {
+    SignalStrength, First_ = SignalStrength,
+    DataTechnology,
+    RegistrationStatus,
+    Sim,
+    Status,
+    Technology,
+    SignalBars,
+    CellName,
+    NetworkName,
+    ExtendedNetworkName,
+    SubscriberIdentity,
+    CurrentMCC,
+    CurrentMNC,
+    HomeMCC,
+    HomeMNC,
+    StkIdleModeText,
+    MMSContext,
+    DataRoamingAllowed,
+    GPRSAttached, Last_ = GPRSAttached
+};
+
 struct ConnectionCache
 {
     std::unique_ptr<ConnectionContext> context;
@@ -81,8 +103,9 @@ typedef std::bitset<cor::enum_size<Interface>()> interfaces_set_type;
 
 class MainNs;
 enum class State;
+using statefs::qt::PropertiesSource;
 
-class Bridge : public QObject, public statefs::qt::PropertiesSource
+class Bridge : public QObject, public PropertiesSource
 {
     Q_OBJECT
 public:
@@ -109,7 +132,14 @@ public:
 
     static Status map_status(QString const&);
     static QString const & ckit_status(Status, SimPresent);
-    static QString const & ofono_status(Status status);
+    static QString const & ofono_status(Status);
+    static constexpr char const *name(Property);
+
+    template <typename T>
+    void updateProperty(Property id, T &&value)
+    {
+        PropertiesSource::updateProperty(name(id), std::forward<T>(value));
+    }
 
 private:
 
@@ -156,10 +186,18 @@ private:
     static const property_map_type connman_property_actions_;
 };
 
+using statefs::qt::Namespace;
+
 class MainNs : public statefs::qt::Namespace
 {
 public:
     MainNs(QDBusConnection &bus);
+
+    template <typename T>
+    void updateProperty(Property id, T &&value)
+    {
+        Namespace::updateProperty(Bridge::name(id), std::forward<T>(value));
+    }
 
 private:
     friend class Bridge;
