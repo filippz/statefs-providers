@@ -51,7 +51,9 @@ BuildArch: noarch
 '''
 
 decl_udev = '''
+%if %{undefined suse_version}
 BuildRequires: boost-filesystem >= 1.51.0
+%endif
 BuildRequires: boost-devel >= 1.51.0
 BuildRequires: pkgconfig(cor-udev) >= 0.1.14
 BuildRequires: pkgconfig(statefs-util) >= %{statefs_ver}
