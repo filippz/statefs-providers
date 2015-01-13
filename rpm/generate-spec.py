@@ -101,17 +101,13 @@ decl_keyboard_generic = '''
 BuildRequires: pkgconfig(cor-udev) >= 0.1.14
 '''
 
-def mk_pkg_name(name):
-    return name.replace('_', '-')
-
-class Actions:
-
-    templates = {
+def setup(d):
+    d.templates = {
         "qt5" : template_qt5
         , "default": template_default
         , "inout" : template_inout }
 
-    extra = {
+    d.extra = {
         "qt5" : {
             "bluez" : decl_bluez
             , "upower" : decl_upower
@@ -126,24 +122,7 @@ class Actions:
         }
     }
 
-    def pk_type_name_data(self, src, pk_type, name, defval):
-        res = src.get(pk_type, None)
-        if res:
-            res = res.get(name, None)
-            
-        return res or defval
-
-    def pk_type_name_list(self, src, pk_type, name):
-        res = self.pk_type_name_data(src, pk_type, name, [])
-        if type(res) == str:
-            res = [res]
-        return res
-
-    def get_extra(self, pk_type, name):
-        res = self.pk_type_name_data(Actions.extra, pk_type, name, "")
-        return res.strip().split('\n')
-
-    provides = {
+    d.provides = {
         "qt5" : {
             "bluez" : "bluetooth"
             , "upower" : "power"
@@ -167,7 +146,7 @@ class Actions:
         }
     }
 
-    conflicts = {
+    d.conflicts = {
         "qt5" : {
             "bluez" : "inout-bluetooth"
             , "upower" : [ "udev", "inout-power" ]
@@ -191,7 +170,7 @@ class Actions:
         }
     }
 
-    summaries = {
+    d.summaries = {
         "qt5" : {
             "bluez" : ", source - bluez"
             , "upower" : ", source - upower"
@@ -216,10 +195,7 @@ class Actions:
         }
     }
 
-    def get_summary(self, pk_type, name):
-        return Actions.summaries[pk_type][name]
-
-    obsoletes = {
+    d.obsoletes = {
         "meego" : {
             "bluetooth" : "bluetooth"
             , "power" : "battery-upower"
@@ -241,6 +217,62 @@ class Actions:
         }
     }
 
+    d.old_formats = {
+        "meego" : "contextkit-meego-{}"
+        , "maemo" : "contextkit-maemo-{}"
+        , "ckit" : "contextkit-plugin-{}"
+    }
+
+    d.versions = {
+        "meego" : [ "%{meego_ver}", "%{meego_ver1}" ]
+        , "maemo" : [ "%{maemo_ver}", "%{maemo_ver1}" ]
+        , "ckit" : [ "%{ckit_version}", "%{ckit_version1}" ]
+    }
+
+    d.qt5_system = ["bluez", "upower", "connman", "ofono", "mce"]
+    d.qt5_user = ["profile"]
+
+    d.default_system = ["udev", "bme", "back_cover", "keyboard_generic"]
+
+    d.old_names = { "keyboard_generic" : "keyboard-generic" }
+
+    d.inout_system = ["bluetooth", "power", "network", "cellular", "mode_control"
+                    , "keyboard", "location"]
+    d.inout_user = ["profile"]
+
+    d.packages = {
+        "qt5" : d.qt5_system + d.qt5_user
+        , "default" : d.default_system
+        , "inout" : d.inout_system + d.inout_user
+    }
+
+    d.inout_user = ["inout_" + a for a in d.inout_user]
+    d.inout_system = ["inout_" + a for a in d.inout_system]
+
+def mk_pkg_name(name):
+    return name.replace('_', '-')
+
+class Actions:
+
+    def pk_type_name_data(self, src, pk_type, name, defval):
+        res = src.get(pk_type, None)
+        if res:
+            res = res.get(name, None)
+
+        return res or defval
+
+    def pk_type_name_list(self, src, pk_type, name):
+        res = self.pk_type_name_data(src, pk_type, name, [])
+        if type(res) == str:
+            res = [res]
+        return res
+
+    def get_extra(self, pk_type, name):
+        res = self.pk_type_name_data(Actions.extra, pk_type, name, "")
+        return res.strip().split('\n')
+
+    def get_summary(self, pk_type, name):
+        return Actions.summaries[pk_type][name]
 
     def generic_name(self, pk_type, name):
         src = Actions.provides[pk_type]
@@ -268,18 +300,6 @@ class Actions:
             res = [res]
         fmt = "Conflicts: statefs-provider-{}"
         return [fmt.format(mk_pkg_name(v)) for v in res]
-
-    old_formats = {
-        "meego" : "contextkit-meego-{}"
-        , "maemo" : "contextkit-maemo-{}"
-        , "ckit" : "contextkit-plugin-{}"
-    }
-
-    versions = {
-        "meego" : [ "%{meego_ver}", "%{meego_ver1}" ]
-        , "maemo" : [ "%{maemo_ver}", "%{maemo_ver1}" ]
-        , "ckit" : [ "%{ckit_version}", "%{ckit_version1}" ]
-    }
 
     def get_obsoletes(self, pk_type, old_type, name):
         name = self.generic_name(pk_type, name)
@@ -313,27 +333,10 @@ class Actions:
             extra = '\n'.join(self.get_extra(pk_type, name)),
             provides = '\n'.join(self.get_provides(pk_type, name) or [])
         )
-        
+
         res = [x for x in res.split('\n') if x]
         res.append("\n")
         return '\n'.join(res)
-
-    qt5_system = ["bluez", "upower", "connman", "ofono", "mce"]
-    qt5_user = ["profile"]
-
-    default_system = ["udev", "bme", "back_cover", "keyboard_generic"]
-
-    old_names = { "keyboard_generic" : "keyboard-generic" }
-
-    inout_system = ["bluetooth", "power", "network", "cellular", "mode_control"
-                    , "keyboard", "location"]
-    inout_user = ["profile"]
-
-    packages = {
-        "qt5" : qt5_system + qt5_user
-        , "default" : default_system
-        , "inout" : inout_system + inout_user
-    }
 
     def __init__(self, l):
         self.line = l
@@ -381,9 +384,9 @@ def replaced(l):
         raise Exception("There is no action {}".format(part))
     return action(name)
 
-Actions.inout_user = ["inout_" + a for a in Actions.inout_user]
-Actions.inout_system = ["inout_" + a for a in Actions.inout_system]
 
+
+setup(Actions)
 
 #print Actions("").get_obsoletes("qt5", "meego", "bluez")
 #print Actions("").get_provides("qt5", "connman")
