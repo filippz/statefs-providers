@@ -1,3 +1,5 @@
+%{!?cmake_install: %global cmake_install make install DESTDIR=%{buildroot}}
+
 %define ckit_version 0.7.41
 %define ckit_version1 0.7.42
 %define ckit_statefs_version 0.2.30
@@ -425,7 +427,7 @@ pushd inout && %cmake && popd
 
 %install
 rm -rf %{buildroot}
-make install DESTDIR=%{buildroot}
+%cmake_install
 pushd inout && make install DESTDIR=%{buildroot} && popd
 
 %statefs_provider_install default udev %{_statefs_libdir}/libprovider-udev.so system
