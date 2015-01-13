@@ -2,6 +2,12 @@
 
 import os, sys, re, itertools
 
+def action(fn):
+    print "ACTION", fn
+    setattr(fn, 'action', True)
+    return fn
+
+
 template_re = re.compile(r'.*@@([a-z0-9A-Z_-]+)@@.*')
 
 template_qt5 = '''
@@ -339,6 +345,7 @@ class Actions:
             res += tpl.format(name = name, old_name=old_name, **kwargs)
         return res.split("\n")
 
+    @action
     def providers(self, name):
         src = getattr(Actions, name)
         with open(name + "-providers.spec.tpl") as f:
@@ -351,11 +358,13 @@ class Actions:
         with open(name + "-install.spec.tpl") as f:
             return self.replace__(''.join(f.readlines()), src, kind = kind)
 
+    @action
     def install(self, name):
         res = self.install__(name, "system") or []
         res.extend(self.install__(name, "user") or [])
         return res
 
+    @action
     def declare(self, name):
         res = [self.get_package_description(name, p).split('\n')
                for p in Actions.packages[name]]
@@ -367,7 +376,10 @@ def replaced(l):
         return (l,)
     actions = Actions(l)
     (part, name) = m.group(1).split("-")
-    return getattr(actions, part)(name)
+    action = getattr(actions, part)
+    if not hasattr(action, 'action'):
+        raise Exception("There is no action {}".format(part))
+    return action(name)
 
 Actions.inout_user = ["inout_" + a for a in Actions.inout_user]
 Actions.inout_system = ["inout_" + a for a in Actions.inout_system]
