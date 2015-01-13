@@ -1,16 +1,21 @@
 #!/usr/bin/python
 
 import os, sys, re, itertools
+from optparse import OptionParser
+
 
 def action(fn):
     print "ACTION", fn
     setattr(fn, 'action', True)
     return fn
 
+class Templates:
+    def __init__(self):
+        self.re = re.compile(r'.*@@([a-z0-9A-Z_-]+)@@.*')
 
-template_re = re.compile(r'.*@@([a-z0-9A-Z_-]+)@@.*')
+templates = Templates()
 
-template_qt5 = '''
+templates.package_qt5 = '''
 %package -n {name}
 Summary: Statefs provider{summary}
 Group: System Environment/Libraries
@@ -27,7 +32,7 @@ Requires: statefs-loader-qt5 >= 0.0.9
 
 '''
 
-template_default = '''
+templates.package_default = '''
 %package -n {name}
 Summary: Statefs provider{summary}
 Group: System Environment/Libraries
@@ -42,7 +47,7 @@ Requires(postun): /sbin/ldconfig
 
 '''
 
-template_inout = '''
+templates.package_inout = '''
 %package -n {name}
 Summary: Statefs inout provider{summary}
 Group: System Environment/Libraries
@@ -56,7 +61,7 @@ BuildArch: noarch
 %{{summary}}
 '''
 
-decl_udev = '''
+templates.decl_udev = '''
 %if %{undefined suse_version}
 BuildRequires: boost-filesystem >= 1.51.0
 %endif
@@ -65,60 +70,60 @@ BuildRequires: pkgconfig(cor-udev) >= 0.1.14
 BuildRequires: pkgconfig(statefs-util) >= %{statefs_ver}
 '''
 
-decl_bluez = '''
+templates.decl_bluez = '''
 Requires: bluez-libs >= 4.0
 '''
 
-decl_bme = '''
+templates.decl_bme = '''
 Requires: bme-rm-680-bin >= 0.9.95
 '''
 
-decl_upower = '''
+templates.decl_upower = '''
 Requires: upower >= 0.9.18
 '''
 
-decl_connman = '''
+templates.decl_connman = '''
 Requires: connman >= 1.15
 '''
 
-decl_ofono = '''
+templates.decl_ofono = '''
 Requires: ofono >= 1.12
 '''
 
-decl_mce = '''
+templates.decl_mce = '''
 BuildRequires: pkgconfig(mce)
 Obsoletes: statefs-provider-inout-mce <= 0.2.43
 Provides: statefs-provider-inout-mce = 0.2.44
 '''
 
-decl_profile = '''
+templates.decl_profile = '''
 Requires: profiled >= 0.30
 Obsoletes: statefs-provider-inout-profile <= 0.2.44.99
 Provides: statefs-provider-inout-profile = 0.2.44.99
 '''
 
-decl_keyboard_generic = '''
+templates.decl_keyboard_generic = '''
 BuildRequires: pkgconfig(cor-udev) >= 0.1.14
 '''
 
 def setup(d):
     d.templates = {
-        "qt5" : template_qt5
-        , "default": template_default
-        , "inout" : template_inout }
+        "qt5" : templates.package_qt5
+        , "default": templates.package_default
+        , "inout" : templates.package_inout }
 
     d.extra = {
         "qt5" : {
-            "bluez" : decl_bluez
-            , "upower" : decl_upower
-            , "connman" : decl_connman
-            , "ofono" : decl_ofono
-            , "mce" : decl_mce
-            , "profile" : decl_profile
+            "bluez" : templates.decl_bluez
+            , "upower" : templates.decl_upower
+            , "connman" : templates.decl_connman
+            , "ofono" : templates.decl_ofono
+            , "mce" : templates.decl_mce
+            , "profile" : templates.decl_profile
         }, "default" : {
-            "udev" : decl_udev
-            , "keyboard_generic" : decl_keyboard_generic
-            , "bme" : decl_bme
+            "udev" : templates.decl_udev
+            , "keyboard_generic" : templates.decl_keyboard_generic
+            , "bme" : templates.decl_bme
         }
     }
 
@@ -374,7 +379,7 @@ class Actions:
         return list(itertools.chain(*res))
 
 def replaced(l):
-    m = template_re.match(l)
+    m = templates.re.match(l)
     if (m is None):
         return (l,)
     actions = Actions(l)
@@ -386,7 +391,12 @@ def replaced(l):
 
 
 
+opt_parser = OptionParser()
+opt_parser.add_option("-F", "--filter", type="string", dest="filter"
+                      , help="regular expression to filter out packages")
+(opts, args) = opt_parser.parse_args(sys.argv)
 setup(Actions)
+
 
 #print Actions("").get_obsoletes("qt5", "meego", "bluez")
 #print Actions("").get_provides("qt5", "connman")
