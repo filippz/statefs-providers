@@ -20,8 +20,8 @@ Q_DECLARE_METATYPE(BluezService);
 
 typedef QList<BluezService> ServiceMap;
 
-QDBusArgument &operator <<(QDBusArgument &, BluezService const&);
-QDBusArgument const& operator >>(QDBusArgument const&, BluezService&);
+// QDBusArgument &operator <<(QDBusArgument &, BluezService const&);
+// QDBusArgument const& operator >>(QDBusArgument const&, BluezService&);
 
 static inline void registerDataTypes()
 {
