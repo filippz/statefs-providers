@@ -62,10 +62,11 @@ template <typename T>
 struct LastN
 {
     LastN(size_t max_size, T precision)
-        : max_size_(max_size_)
+        : max_size_(max_size)
         , sum_(0)
         , precision_(precision)
-    {}
+    {
+    }
 
     void clear()
     {
@@ -520,7 +521,7 @@ void Monitor::on_charger(udevpp::Device const &dev)
 {
     auto path = attr<std::string>(dev.path());
     auto is_online = attr<bool>(dev.attr("online"));
-    charger_state_.insert({path, is_online});
+    charger_state_[path] = is_online;
 }
 
 void Monitor::on_battery(udevpp::Device const &dev)
