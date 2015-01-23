@@ -34,8 +34,8 @@ BuildRequires: statefs >= %{statefs_ver}
 BuildRequires: pkgconfig(statefs-cpp) >= %{statefs_ver}
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5DBus)
-BuildRequires: pkgconfig(cor) >= 0.1.16
-BuildRequires: pkgconfig(qtaround-dbus) >= 0.2.0
+BuildRequires: pkgconfig(cor) >= 0.1.17
+BuildRequires: pkgconfig(qtaround-dbus) >= 0.2.4
 
 %description
 %{summary}
