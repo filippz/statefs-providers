@@ -280,7 +280,7 @@ void BackCoverMonitor::disconnect()
     m_slot = 0;
 }
 
-int BackCoverMonitor::read(std::string *h, char *dst, size_t len, off_t off)
+int BackCoverMonitor::read(std::string *, char *dst, size_t len, off_t off)
 {
     if (len < 1 || off != 0) {
         return -1;
@@ -294,7 +294,7 @@ int BackCoverMonitor::read(std::string *h, char *dst, size_t len, off_t off)
     return 1;
 }
 
-int BackCoverMonitor::write(std::string *h, char const *src, size_t len, off_t off)
+int BackCoverMonitor::write(std::string *, char const *, size_t, off_t)
 {
     return -1;
 }

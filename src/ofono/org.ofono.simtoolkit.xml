@@ -3,7 +3,7 @@
 <node>
 	<interface name="org.ofono.SimToolkit">
 		<method name="GetProperties">
-			<annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
+			<annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
 			<arg type="a{sv}" direction="out"/>
 		</method>
 		<method name="SelectItem">

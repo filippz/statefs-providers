@@ -4,7 +4,7 @@
 	<interface name="net.connman.Notification">
 		<method name="Release"/>
 		<method name="Update">
-			<annotation name="com.trolltech.QtDBus.QtTypeName.In0" value="QVariantMap"/>
+			<annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
 			<arg type="a{sv}"/>
 		</method>
 	</interface>

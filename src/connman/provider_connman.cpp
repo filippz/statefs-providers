@@ -88,7 +88,7 @@ void Bridge::process_manager_props(QVariantMap const &props)
                 process_technologies();
             });
     connect(manager_.get(), &Manager::ServicesAdded
-            , [this] (PathPropertiesArray const &info) {
+            , [this] (PathPropertiesArray const &) {
                 qDebug() << "Services added";
                 process_services();
             });

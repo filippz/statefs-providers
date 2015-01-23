@@ -36,7 +36,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#define BME_API=11
+#define BME_API (11)
 
 #define BME_SOCK_PATH "/tmp/.bmesrv"
 #define BME_COOKIE "BMentity"

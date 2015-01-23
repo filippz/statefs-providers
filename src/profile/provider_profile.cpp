@@ -51,8 +51,8 @@ void Bridge::init_conn()
     };
 
     auto on_changed = [set_profile]
-        (bool changed, bool active, const QString &profile
-         , ProfileDataList values) {
+        (bool, bool active, const QString &profile
+         , ProfileDataList) {
         if (active) {
             qDebug() << "Active profile is " << profile;
             set_profile(profile);
