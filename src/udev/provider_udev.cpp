@@ -22,6 +22,54 @@ using statefs::PropertyStatus;
 
 namespace statefs { namespace udev {
 
+enum class Prop
+{
+    BatTime
+        , IsOnline
+        , EnergyNow
+        , Capacity
+        , Voltage
+        , Current
+        , Power
+        , Temperature
+        , State
+        , TimeToLow
+        , TimeToFull
+        , Last_ = TimeToFull
+};
+
+typedef Record<Prop
+               , time_t
+               , bool
+               , long
+               , long
+               , long
+               , long
+               , long
+               , long
+               , std::string
+               , long
+               , long
+               > State;
+
+}}
+
+RECORD_TRAITS_FIELD_NAMES(statefs::udev::State
+                          , "BatTime"
+                          , "IsOnline"
+                          , "EnergyNow"
+                          , "Capacity"
+                          , "Voltage"
+                          , "Current"
+                          , "Power"
+                          , "Temperature"
+                          , "State"
+                          , "TimeToLow"
+                          , "TimeToFull"
+                          );
+
+namespace statefs { namespace udev {
+
 static cor::debug::Log log{"statefs_udev", std::cerr};
 
 static std::string str_or_default(char const *v, char const *defval)
@@ -59,6 +107,11 @@ static inline std::string statefs_attr(T const &v)
 static inline std::string statefs_attr(bool v)
 {
     return std::to_string(v ? 1 : 0);
+}
+
+static inline std::string const& statefs_attr(std::string const &v)
+{
+    return v;
 }
 
 template <typename T>
@@ -141,7 +194,7 @@ public:
     enum class Prop {
         ChargePercentage, Capacity, OnBattery, LowBattery
             , TimeUntilLow, TimeUntilFull, IsCharging, Temperature
-            , Power
+            , Power, State, Voltage, Current
             , EOE // end of enum
     };
     enum class PType { Analog, Discrete };
@@ -183,23 +236,28 @@ private:
     std::unique_ptr<std::thread> monitor_thread_;
 };
 
+struct SystemState
+{
+    enum class Screen { Unknown, On, Off, Lost };
+    SystemState()
+        : screen_(Screen::Unknown)
+    {}
+
+    Screen screen_;
+};
+
 class Monitor
 {
     typedef time_t time_type;
-
-    enum class Prop
-    {
-        BatTime, IsOnline, EnergyNow, Power
-            , Capacity, TimeToLow, TimeToFull
-    };
-
-    typedef std::tuple<time_type, bool, long, long
-                       , long, long, long> state_type;
 
     enum TimerAction {
         RestartTimer, NoTimerAction
     };
 public:
+    enum class BatState {
+        Unknown, Charging, Discharging, Full, Low
+            , Last_ = Low
+            };
     Monitor(asio::io_service &io, BatteryNs *);
     void run();
 
@@ -237,14 +295,7 @@ private:
     template <Prop i, typename T>
     void set(T v)
     {
-        std::get<static_cast<size_t>(i)>(current_) = v;
-    }
-
-    template <Prop I>
-    static typename std::tuple_element
-    <static_cast<size_t>(I), state_type>::type const& get(state_type const &src)
-    {
-        return std::get<static_cast<size_t>(I)>(src);
+        now_.get<i>() = v;
     }
 
     template <typename FnT>
@@ -284,11 +335,15 @@ private:
     asio::posix::stream_descriptor udev_stream_;
     asio::posix::stream_descriptor blanked_stream_;
     asio::deadline_timer timer_;
-    state_type last_;
-    state_type current_;
+    State previous_;
+    State now_;
     LastN<long> denergy_;
     std::unique_ptr<udevpp::Device> battery_;
     std::map<std::string, bool> charger_state_;
+    bool is_actual_;
+    long low_capacity_;
+    SystemState system_;
+    std::atomic_flag is_timer_allowed_;
 };
 
 using std::make_tuple;
@@ -309,8 +364,11 @@ const BatteryNs::info_type BatteryNs::info = {{
         , make_tuple("TimeUntilLow", "7117", PType::Discrete)
         , make_tuple("TimeUntilFull", "0", PType::Discrete)
         , make_tuple("IsCharging", "0", PType::Discrete)
-        , make_tuple("Temperature", "293", PType::Analog)
+        , make_tuple("Temperature", "293", PType::Discrete)
         , make_tuple("Power", "0", PType::Discrete)
+        , make_tuple("State", "unknown", PType::Discrete)
+        , make_tuple("Voltage", "3800000", PType::Discrete)
+        , make_tuple("Current", "0", PType::Discrete)
     }};
 
 class Provider;
@@ -343,7 +401,7 @@ BatteryNs::BatteryNs()
     : Namespace("Battery")
     , mon_(new Monitor(io_, this))
     , analog_info_{{
-        BatteryNs::Prop::Temperature, mon_->temperature_source()
+        // BatteryNs::Prop::Temperature, mon_->temperature_source()
             }}
 {
     auto analog_setter = [](std::string const &) {
@@ -377,11 +435,26 @@ void BatteryNs::set(Prop id, std::string const &v)
     setters_[static_cast<size_t>(id)](v);
 }
 
+static long energy_full_default = 800000;
+
+static State state_default{
+    (time_t)0
+        , false
+        , energy_full_default
+        , 42 // %
+        , 0 // uA
+        , 3800 // mV
+        , 36000 // uW
+        , 273 // oK
+        , "unknown"
+        , 0 , 0 // s
+        };
+
 Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
     : bat_ns_(bat_ns)
     , io_(io)
     , dtimer_sec_(2)
-    , energy_full_(800000)
+    , energy_full_(energy_full_default)
     , denergy_max_(10000)
     , root_()
     , mon_([this]() {
@@ -397,11 +470,15 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
         }())
     , blanked_stream_(io)
     , timer_(io)
-    , last_{::time(nullptr), false, energy_full_, 0, 100, 36000, 0}
-    , current_(last_)
+    , previous_(state_default)
+    , now_(state_default)
     , denergy_(6, 10)
+    , is_actual_(false)
+    , low_capacity_(10) // TODO temporary hard-coded
     {
         log.debug("New monitor");
+        is_timer_allowed_.test_and_set(std::memory_order_acquire);
+        set<Prop::BatTime>(::time(nullptr));
     }
 
 void Monitor::run()
@@ -418,6 +495,7 @@ void Monitor::run()
             }
             on_device(std::move(dev));
             mw_per_percent_ = energy_full_ / 100;
+            log.debug("mW/%=", mw_per_percent_);
             calc_limits();
         };
 
@@ -433,19 +511,22 @@ void Monitor::monitor_events()
     log.debug("Mon Events");
     auto on_event = [this](error_code ec, std::size_t) {
         log.debug("Got event");
-        timer_.cancel();
         if (ec) {
-            log.error("Event is error", ec);
+            log.error("Event is error", ec, ", stopping I/O");
             io_.stop();
             return;
         }
-        before_enumeration();
+        log.debug("Cancel timer");
+        is_timer_allowed_.clear(std::memory_order_release);
+        timer_.cancel();
+        //before_enumeration();
         on_device(mon_.device(root_));
         after_enumeration();
         notify();
         monitor_events();
     };
 
+    //is_timer_allowed_.test_and_set(std::memory_order_acquire);
     monitor_timer();
 
     using namespace std::placeholders;
@@ -461,20 +542,29 @@ void Monitor::monitor_screen(TimerAction timer_action)
     using boost::system::error_code;
     auto on_screen = [this](error_code ec, std::size_t) {
         log.debug("Got screen event");
-        timer_.cancel();
         if (ec) {
+            system_.screen_ = SystemState::Screen::Lost;
             log.error("Event is error", ec);
-            io_.stop();
             return;
         }
+        log.debug("Cancel timer");
+        is_timer_allowed_.clear(std::memory_order_release);
+        timer_.cancel();
         char buf[4];
         lseek(blanked_stream_.native_handle(), 0, SEEK_SET);
         auto len = blanked_stream_.read_some(asio::buffer(buf, sizeof(buf)));
         if (len && len < sizeof(buf)) {
             buf[len] = 0;
-            if (::atoi(buf))
-                update_info();
+            bool is_on = (::atoi(buf) == 0);
+            log.debug("Screen is_on?=", is_on);
+            system_.screen_ = is_on
+                ? SystemState::Screen::On
+                : SystemState::Screen::Off;
+            update_info();
+        } else {
+            log.debug("Read from screen:", len);
         }
+        //is_timer_allowed_.test_and_set(std::memory_order_acquire);
         monitor_screen(RestartTimer);
     };
 
@@ -488,12 +578,12 @@ void Monitor::monitor_screen(TimerAction timer_action)
     auto screen_wrapper = std::bind
         (cor::error_trace_nothrow<decltype(on_screen), error_code, std::size_t>
          , on_screen, _1, _2);
-        blanked_stream_.async_read_some(asio::null_buffers(), screen_wrapper);
+    blanked_stream_.async_read_some(asio::null_buffers(), screen_wrapper);
 }
 
 void Monitor::before_enumeration()
 {
-    //charger_state_.clear();
+    charger_state_.clear();
 }
 
 void Monitor::after_enumeration()
@@ -516,9 +606,12 @@ void Monitor::on_device(udevpp::Device &&dev)
         //     charger_ = cor::make_unique<udevpp::Device>(std::move(dev));
     } else if (t == "Battery") {
         on_battery(dev);
-        // TODO there can be several batteris including also backup battery
+        // TODO there can be several batteries including also backup battery
         if (!battery_ || *battery_ != dev)
             battery_ = cor::make_unique<udevpp::Device>(std::move(dev));
+    } else {
+        charger_state_.erase(dev.path());
+        log.warning("Device of unknown type ", t, ": ", dev.path());
     }
 }
 
@@ -526,14 +619,20 @@ void Monitor::on_charger(udevpp::Device const &dev)
 {
     auto path = attr<std::string>(dev.path());
     auto is_online = attr<bool>(dev.attr("online"));
-    log.info("Charger: ", path, " is ", (is_online ? "online" : "offline"));
+    log.debug("On charger ", path, (is_online ? " online" : " offline"));
     charger_state_[path] = is_online;
 }
 
 void Monitor::on_battery(udevpp::Device const &dev)
 {
+    auto path = attr<std::string>(dev.path());
+    log.debug("On battery ", path);
     set<Prop::BatTime>(::time(nullptr));
     set<Prop::EnergyNow>(attr<long>(dev.attr("energy_now")));
+    set<Prop::Current>(attr<long>(dev.attr("current_now")));
+    set<Prop::Voltage>(attr<long>(dev.attr("voltage_now")));
+    set<Prop::Temperature>(attr<long>(dev.attr("temp")));
+    set<Prop::State>(dev.attr("status"));
     set<Prop::Capacity>(attr<long>(dev.attr("capacity")));
 }
 
@@ -546,87 +645,156 @@ void Monitor::notify()
         dt = tnow - twas;
     };
 
-    auto process_energy = [this, &dt](long enow, long ewas) {
-        log.debug("Energy -> ", enow);
-        auto sec = dt;
-        log.debug("DT=", sec, "s");
-        if (!sec)
-            return;
+    bool is_energy_changed = false;
+    bool is_charging_changed = false;
+    bool is_bat_low = false;
 
-        auto de = (enow - ewas) / sec;
+    auto process_is_online = [this, &is_charging_changed]
+        (bool online_now, bool) {
+        log.info("Charger online status ->", online_now);
+        is_charging_changed = true;
+        set_battery_prop<P::OnBattery>(!online_now);
+    };
+
+    auto process_de = [this, &is_energy_changed](long de) {
+        auto enow = now_.get<Prop::EnergyNow>();
         log.debug("dE=", de);
         if (!de)
             return;
         denergy_.push(de);
         if (de < 0) {
-            if (-de > denergy_max_) {
-                denergy_max_ = -de;
-                calc_limits();
-            }
+            denergy_max_ = -de;
             de = denergy_.average();
+            if (de < 0 && -de > denergy_max_)
+                denergy_max_ = -de; // be pessimistic
+            calc_limits();
             log.debug("dEavg=", de);
-            auto et = de != 0 ? - enow / de : 0;
+            auto et = de != 0 ? - enow / de * 360 / 100 : 0;
             set<Prop::TimeToLow>(et);
             set<Prop::TimeToFull>(0);
         } else {
             de = denergy_.average();
-            auto et = de != 0 ? (energy_full_ - enow) / de : 0;
+            auto et = de != 0 ? (energy_full_ - enow) / de * 360 / 100 : 0;
             set<Prop::TimeToLow>(0);
             set<Prop::TimeToFull>(et);
         }
+        is_energy_changed = true;
         set<Prop::Power>(de);
     };
 
-    bool is_charging_changed = false;
-    auto process_is_online = [this, &is_charging_changed]
-        (bool online_now, bool online_was) {
-        log.info("Charger online status ", online_was, "->", online_now);
-        if (online_now != online_was) {
-            is_charging_changed = true;
-            set_battery_prop<P::IsCharging>(online_now);
+    auto process_energy = [this](long enow) {
+        // log.debug("Energy -> ", enow);
+        // auto sec = dt;
+        // log.debug("DT=", sec, "s");
+        // if (!sec)
+        //     return;
+
+        // auto de = (enow - ewas) / sec;
+        set_battery_prop<P::Capacity>((double)enow / energy_full_ * 100);
+        // process_de(de);
+    };
+
+    auto tmp_process_percentage = [this, &is_bat_low](long v) {
+        if (v < 0 || v > 100) {
+            log.warning("Do not accept percentage ", v, ", use fake");
+            v = 42;
         }
+        log.debug("Capacity=", v);
+        set_battery_prop<P::ChargePercentage>(v);
+        is_bat_low = v <= low_capacity_;
+        set_battery_prop<P::LowBattery>(is_bat_low);
+    };
+
+    auto process_voltage = [this](long v) {
+        set_battery_prop<P::Voltage>(v);
+        // TODO check it
+    };
+
+    auto process_current = [this, &is_energy_changed, &process_de](long i) {
+        set_battery_prop<P::Current>(i);
+        if (is_energy_changed)
+            return;
+        // otherwise calculate from I*V
+        auto v = now_.get<Prop::Voltage>();
+        auto p = (i / -1000) * (v / 1000) / 1000;
+        log.debug("Calc power I*V (", i, "*", v, ")=", p);
+        process_de(p);
     };
 
     auto process_power = [this](long p) {
         log.debug("Power=", p);
         set_battery_prop<P::Power>(p);
-        set_battery_prop<P::OnBattery>(p < 0);
     };
 
-    auto tmp_process_percentage = [this](long v) {
-        if (v < 10 || v > 100) {
-            log.warning("Do not accept percentage ", v, ", use fake");
-            v = 42;
+    auto process_state = [this, &is_bat_low](std::string s) {
+        log.debug("Status=", s);
+        static const std::map<std::string, std::string> rename = {{
+                {"Charging", "charging"}
+                , {"Discharging", "discharging"}
+                , {"Full", "full"}
+            }};
+        std::string state{"unknown"};
+        auto it = rename.find(s);
+        if (it != rename.end()) {
+            state = it->second;
+        } else {
+            if (is_bat_low)
+                state = "low";
         }
-        set_battery_prop<P::ChargePercentage>(v);
+        set_battery_prop<P::State>(state);
     };
 
-    // BatTime, IsOnline, EnergyNow
-    // , Power, Capacity
-    // , TimeToLow, TimeToFull
+    // see enum class Prop
     const auto actions = std::make_tuple
         (update_dt
          , process_is_online
          , process_energy
-         , process_power
          , tmp_process_percentage //battery_setter<P::ChargePercentage, long>()
+         , process_voltage
+         , process_current
+         , process_power
+         , battery_setter<P::Temperature, long>()
+         , process_state
          , battery_setter<P::TimeUntilLow, long>()
-         , battery_setter<P::TimeUntilFull, long>());
+         , battery_setter<P::TimeUntilFull, long>()
+         );
 
-    auto count = cor::copy_apply_if_changed(last_, current_, actions);
-    if (count == 1) // only time
-        return;
+    auto set_charging = [this]() {
+        auto p = now_.get<Prop::Power>();
+        auto o = now_.get<Prop::IsOnline>();
+        set_battery_prop<P::IsCharging>(o && p > 0);
+    };
+    if (is_actual_) {
+        auto count = cor::copy_apply_if_changed
+            (previous_.data, now_.data, actions);
+        // TODO check what props are changed and return if nothing is
+        // changed
+        if (is_charging_changed || is_energy_changed)
+            set_charging();
+    } else {
+        set_battery_prop<P::ChargePercentage>(now_.get<Prop::Capacity>());
+        process_energy(now_.get<Prop::EnergyNow>());
+        auto p = now_.get<Prop::Power>();
+        set_battery_prop<P::Power>(p < 0);
+        auto o = now_.get<Prop::IsOnline>();
+        set_charging();
+        set_battery_prop<P::OnBattery>(!o);
+        set_battery_prop<P::TimeUntilLow>(now_.get<Prop::TimeToLow>());
+        set_battery_prop<P::TimeUntilFull>(now_.get<Prop::TimeToFull>());
+        process_state(now_.get<Prop::State>());
+        is_actual_ = true;
+    }
 
     if (!is_charging_changed) {
-        log.debug(count, " props are changed");
-        auto o = get<Prop::IsOnline>(current_);
+        auto o = now_.get<Prop::IsOnline>();
         if (o) {
             log.debug("Online, so timer period is short");
             dtimer_sec_ = 4;
         } else {
-            auto p = get<Prop::Power>(current_);
-            // auto c = get<Prop::Capacity>(current_);
+            auto p = now_.get<Prop::Power>();
+            // auto c = get<Prop::Capacity>(now_);
             dtimer_sec_ = p ? std::max(sec_per_percent_max_ / 2, (long)1) : 5;
+            dtimer_sec_ = std::min((int)dtimer_sec_, 60);
             log.debug("dTcalc=", dtimer_sec_);
         }
     } else {
@@ -654,9 +822,13 @@ void Monitor::monitor_timer()
     auto handler = [this](boost::system::error_code ec) {
         log.debug("Timer event");
         if (ec == asio::error::operation_aborted) {
-            log.debug("Timer is cancelled");
-            return;
+            if (!is_timer_allowed_.test_and_set(std::memory_order_acquire)) {
+                log.debug("Timer is cancelled from Monitor");
+                return;
+            }
         }
+        if (system_.screen_ == SystemState::Screen::Lost)
+            monitor_screen(NoTimerAction);
         update_info();
         monitor_timer();
     };
