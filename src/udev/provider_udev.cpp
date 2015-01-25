@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include <time.h>
+#include <queue>
 
 #include <boost/asio.hpp>
 #include <boost/asio/posix/basic_descriptor.hpp>
@@ -21,56 +22,6 @@ namespace udevpp = cor::udevpp;
 using statefs::PropertyStatus;
 
 namespace statefs { namespace udev {
-
-enum class Prop
-{
-    BatTime
-        , IsOnline
-        , EnergyNow
-        , Capacity
-        , Voltage
-        , Current
-        , Power
-        , Temperature
-        , State
-        , TimeToLow
-        , TimeToFull
-        , Last_ = TimeToFull
-};
-
-typedef Record<Prop
-               , time_t
-               , bool
-               , long
-               , long
-               , long
-               , long
-               , long
-               , long
-               , std::string
-               , long
-               , long
-               > State;
-
-}}
-
-RECORD_TRAITS_FIELD_NAMES(statefs::udev::State
-                          , "BatTime"
-                          , "IsOnline"
-                          , "EnergyNow"
-                          , "Capacity"
-                          , "Voltage"
-                          , "Current"
-                          , "Power"
-                          , "Temperature"
-                          , "State"
-                          , "TimeToLow"
-                          , "TimeToFull"
-                          );
-
-namespace statefs { namespace udev {
-
-static cor::debug::Log log{"statefs_udev", std::cerr};
 
 static std::string str_or_default(char const *v, char const *defval)
 {
@@ -113,6 +64,102 @@ static inline std::string const& statefs_attr(std::string const &v)
 {
     return v;
 }
+
+static inline std::string statefs_attr(char const *v)
+{
+    return std::string(v);
+}
+
+
+enum class ChargerType {
+    Absent = 0, DCP, USB, Mains, Unknown, Last_ = Unknown
+};
+
+static char const * charger_type_name(ChargerType t)
+{
+    static char const * charger_type_names[] = {
+        "", "dcp", "usb", "dcp", "unknown"
+    };
+    static_assert(sizeof(charger_type_names)/sizeof(charger_type_names[0])
+                  == cor::enum_size<ChargerType>()
+                  , "Check charger type names");
+    return charger_type_names[cor::enum_index(t)];
+}
+
+static ChargerType charger_type(std::string const &v)
+{
+    return (v == "USB_DCP"
+            ? ChargerType::DCP
+            : (v == "Mains"
+               ? ChargerType::Mains
+               : (v == "USB"
+                  ? ChargerType::USB
+                  : ChargerType::Unknown)));
+}
+
+struct ChargerInfo
+{
+    ChargerInfo(udevpp::Device const &dev)
+        : type(charger_type(attr<std::string>(dev.attr("type"))))
+        , online(attr<bool>(dev.attr("online")))
+    {}
+
+    ChargerType type;
+    bool online;
+};
+
+enum class Prop
+{
+    BatTime
+        , IsOnline
+        , EnergyNow
+        , Capacity
+        , Voltage
+        , Current
+        , Power
+        , Temperature
+        , State
+        , TimeToLow
+        , TimeToFull
+        , Charger
+        , Last_ = Charger
+};
+
+typedef Record<Prop
+               , time_t
+               , bool
+               , long
+               , long
+               , long
+               , long
+               , long
+               , long
+               , std::string
+               , long
+               , long
+               , ChargerType
+               > State;
+
+}}
+
+RECORD_TRAITS_FIELD_NAMES(statefs::udev::State
+                          , "BatTime"
+                          , "IsOnline"
+                          , "EnergyNow"
+                          , "Capacity"
+                          , "Voltage"
+                          , "Current"
+                          , "Power"
+                          , "Temperature"
+                          , "State"
+                          , "TimeToLow"
+                          , "TimeToFull"
+                          , "Charger"
+                          );
+
+namespace statefs { namespace udev {
+
+static cor::debug::Log log{"statefs_udev", std::cerr};
 
 template <typename T>
 struct LastN
@@ -194,7 +241,7 @@ public:
     enum class Prop {
         ChargePercentage, Capacity, OnBattery, LowBattery
             , TimeUntilLow, TimeUntilFull, IsCharging, Temperature
-            , Power, State, Voltage, Current
+            , Power, State, Voltage, Current, Charger
             , EOE // end of enum
     };
     enum class PType { Analog, Discrete };
@@ -301,6 +348,7 @@ private:
     template <typename FnT>
     void for_each_power_device(FnT const &fn)
     {
+        log.debug("Check each power device");
         before_enumeration();
         udevpp::Enumerate e(root_);
         e.subsystem_add("power_supply");
@@ -339,7 +387,7 @@ private:
     State now_;
     LastN<long> denergy_;
     std::unique_ptr<udevpp::Device> battery_;
-    std::map<std::string, bool> charger_state_;
+    std::map<std::string, ChargerInfo> charger_state_;
     bool is_actual_;
     long low_capacity_;
     SystemState system_;
@@ -355,7 +403,6 @@ std::tuple<typename T::handle_ptr, statefs::setter_type> make_prop(T const &t)
     return make_tuple(prop, setter(prop));
 }
 
-
 const BatteryNs::info_type BatteryNs::info = {{
         make_tuple("ChargePercentage", "42", PType::Discrete)
         , make_tuple("Capacity", "42", PType::Discrete)
@@ -369,6 +416,8 @@ const BatteryNs::info_type BatteryNs::info = {{
         , make_tuple("State", "unknown", PType::Discrete)
         , make_tuple("Voltage", "3800000", PType::Discrete)
         , make_tuple("Current", "0", PType::Discrete)
+        , make_tuple("Charger", charger_type_name(ChargerType::Unknown)
+                     , PType::Discrete)
     }};
 
 class Provider;
@@ -448,6 +497,7 @@ static State state_default{
         , 273 // oK
         , "unknown"
         , 0 , 0 // s
+        , ChargerType::Unknown
         };
 
 Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
@@ -553,7 +603,7 @@ void Monitor::monitor_screen(TimerAction timer_action)
         char buf[4];
         lseek(blanked_stream_.native_handle(), 0, SEEK_SET);
         auto len = blanked_stream_.read_some(asio::buffer(buf, sizeof(buf)));
-        if (len && len < sizeof(buf)) {
+        if (len && len < sizeof(buf)) { // expecting values [0, 1]
             buf[len] = 0;
             bool is_on = (::atoi(buf) == 0);
             log.debug("Screen is_on?=", is_on);
@@ -562,7 +612,7 @@ void Monitor::monitor_screen(TimerAction timer_action)
                 : SystemState::Screen::Off;
             update_info();
         } else {
-            log.debug("Read from screen:", len);
+            log.debug("Wrong read from screen?:", len);
         }
         //is_timer_allowed_.test_and_set(std::memory_order_acquire);
         monitor_screen(RestartTimer);
@@ -588,19 +638,33 @@ void Monitor::before_enumeration()
 
 void Monitor::after_enumeration()
 {
-    auto is_online = [](std::pair<std::string, bool> const &nv) {
-        log.debug("Charger ", nv.first, " online? ", nv.second);
-        return nv.second;
+    auto compare = [](ChargerType const &t1, ChargerType const &t2) {
+        return cor::enum_index(t1) > cor::enum_index(t2);
     };
-    auto v = std::any_of(charger_state_.begin(), charger_state_.end()
-                         , is_online);
-    set<Prop::IsOnline>(v);
+    std::priority_queue<ChargerType, std::vector<ChargerType>, decltype(compare)>
+        found_online(compare);
+
+    auto check_online = [&found_online]
+        (std::pair<std::string, ChargerInfo> const &nv) {
+        auto const &info = nv.second;
+        log.debug("Charger ", nv.first, ", type=", charger_type_name(info.type)
+                  , "is_online?=", info.online);
+        if (info.online)
+            found_online.push(info.type);
+    };
+    log.debug("Check chargers state");
+    std::for_each(charger_state_.begin(), charger_state_.end(), check_online);
+    auto is_online = found_online.size() > 0;
+    if (is_online)
+        log.debug("There is online charger:", charger_type_name(found_online.top()));
+    set<Prop::Charger>(is_online ? found_online.top() : ChargerType::Absent);
+    set<Prop::IsOnline>(is_online);
 }
 
 void Monitor::on_device(udevpp::Device &&dev)
 {
-    auto t = str_or_default(dev.attr("type"), "");
-    if (t == "Mains" || t == "USB") {
+    auto t = attr<std::string>(dev.attr("type"));
+    if (charger_type(t) != ChargerType::Unknown) {
         on_charger(dev);
         // if (!charger_ || *charger_ != dev)
         //     charger_ = cor::make_unique<udevpp::Device>(std::move(dev));
@@ -620,7 +684,12 @@ void Monitor::on_charger(udevpp::Device const &dev)
     auto path = attr<std::string>(dev.path());
     auto is_online = attr<bool>(dev.attr("online"));
     log.debug("On charger ", path, (is_online ? " online" : " offline"));
-    charger_state_[path] = is_online;
+    ChargerInfo info(dev);
+    auto it = charger_state_.find(path);
+    if (it != charger_state_.end())
+        it->second = std::move(info);
+    else
+        charger_state_.insert(std::make_pair(path, std::move(info)));
 }
 
 void Monitor::on_battery(udevpp::Device const &dev)
@@ -744,6 +813,10 @@ void Monitor::notify()
         set_battery_prop<P::State>(state);
     };
 
+    auto process_charger = [this](ChargerType t) {
+        set_battery_prop<P::Charger>(charger_type_name(t));
+    };
+
     // see enum class Prop
     const auto actions = std::make_tuple
         (update_dt
@@ -757,6 +830,7 @@ void Monitor::notify()
          , process_state
          , battery_setter<P::TimeUntilLow, long>()
          , battery_setter<P::TimeUntilFull, long>()
+         , process_charger
          );
 
     auto set_charging = [this]() {
@@ -782,6 +856,7 @@ void Monitor::notify()
         set_battery_prop<P::TimeUntilLow>(now_.get<Prop::TimeToLow>());
         set_battery_prop<P::TimeUntilFull>(now_.get<Prop::TimeToFull>());
         process_state(now_.get<Prop::State>());
+        process_charger(now_.get<Prop::Charger>());
         is_actual_ = true;
     }
 
