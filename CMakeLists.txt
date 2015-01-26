@@ -35,6 +35,7 @@ link_directories(
 
 install(DIRECTORY include/statefs DESTINATION include/qt5)
 
+add_subdirectory(doc)
 add_subdirectory(src/util)
 add_subdirectory(src/bluez)
 add_subdirectory(src/bme)

@@ -1,7 +1,7 @@
 #ifndef _STATEFS_PRIVATE_CONNMAN_HPP_
 #define _STATEFS_PRIVATE_CONNMAN_HPP_
 
-#include "profile_interface.h"
+#include "qdbusxml2cpp_profile_interface.h"
 
 #include <statefs/provider.hpp>
 #include <statefs/property.hpp>

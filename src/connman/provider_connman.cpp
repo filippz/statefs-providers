@@ -26,7 +26,7 @@
 #include <math.h>
 #include <iostream>
 #include <qtaround/dbus.hpp>
-#include "dbus_types.hpp"
+#include "qdbusxml2cpp_dbus_types.hpp"
 
 namespace statefs { namespace connman {
 

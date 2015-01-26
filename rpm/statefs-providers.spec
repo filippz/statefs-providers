@@ -59,6 +59,16 @@ BuildRequires: pkgconfig(statefs-qt5) >= 0.2.47
 %description %{p_common}
 %{summary}
 
+%package doc
+Summary: Statefs providers documentation
+Group: Documenation
+BuildRequires: doxygen
+%if 0%{?_with_docs:1}
+BuildRequires: graphviz
+%endif
+%description doc
+Statefs providers documentation
+
 %package qt5-devel
 Summary: StateFS Qt5 library for providers, development files
 Group: Development/Libraries
@@ -465,6 +475,11 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %doc README
 %{_libdir}/libstatefs-providers-qt5.so
+
+%files doc
+%defattr(-,root,root,-)
+%dir %{_datarootdir}/doc/statefs-providers
+%{_datarootdir}/doc/statefs-providers/html/*
 
 %post %{p_common} -p /sbin/ldconfig
 %postun %{p_common} -p /sbin/ldconfig

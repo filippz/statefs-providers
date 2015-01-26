@@ -1,9 +1,9 @@
 #ifndef _STATEFS_PRIVATE_CONNMAN_HPP_
 #define _STATEFS_PRIVATE_CONNMAN_HPP_
 
-#include "manager_interface.h"
-#include "service_interface.h"
-#include "technology_interface.h"
+#include "qdbusxml2cpp_manager_interface.h"
+#include "qdbusxml2cpp_service_interface.h"
+#include "qdbusxml2cpp_technology_interface.h"
 
 #include <statefs/provider.hpp>
 #include <statefs/property.hpp>

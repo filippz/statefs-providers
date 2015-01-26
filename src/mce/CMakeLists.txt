@@ -1,3 +1,4 @@
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC TRUE)
 set(SELF mce)
 
@@ -25,7 +26,7 @@ set_source_files_properties(${ALL_IF}
   )
 
 
-qt5_add_dbus_interface(SRC ${MCE_IF} mce_interface)
+qt5_add_dbus_interface(SRC ${MCE_IF} qdbusxml2cpp_mce_interface)
 
 add_library(provider-${SELF} SHARED
   ${SRC}

@@ -1,9 +1,9 @@
 #ifndef _STATEFS_PRIVATE_BLUEZ_HPP_
 #define _STATEFS_PRIVATE_BLUEZ_HPP_
 
-#include "manager_interface.h"
-#include "adapter_interface.h"
-#include "device_interface.h"
+#include "qdbusxml2cpp_manager_interface.h"
+#include "qdbusxml2cpp_adapter_interface.h"
+#include "qdbusxml2cpp_device_interface.h"
 
 #include <statefs/provider.hpp>
 #include <statefs/property.hpp>

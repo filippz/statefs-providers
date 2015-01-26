@@ -1,3 +1,4 @@
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC TRUE)
 
 include_directories(
@@ -18,9 +19,9 @@ set_source_files_properties(${MGR_IF} ${DEV_IF} ${PROP_IF}
   PROPERTIES NO_NAMESPACE TRUE
   )
 
-qt5_add_dbus_interface(SRC ${MGR_IF} manager_interface)
-qt5_add_dbus_interface(SRC ${DEV_IF} device_interface)
-qt5_add_dbus_interface(SRC ${PROP_IF} prop_interface)
+qt5_add_dbus_interface(SRC ${MGR_IF} qdbusxml2cpp_manager_interface)
+qt5_add_dbus_interface(SRC ${DEV_IF} qdbusxml2cpp_device_interface)
+qt5_add_dbus_interface(SRC ${PROP_IF} qdbusxml2cpp_prop_interface)
 
 add_library(provider-upower SHARED
   ${SRC}

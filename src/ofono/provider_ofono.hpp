@@ -7,12 +7,12 @@
  * @par License: LGPL 2.1 http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
  */
 
-#include "manager_interface.h"
-#include "net_interface.h"
-#include "sim_interface.h"
-#include "stk_interface.h"
-#include "connectionmanager_interface.h"
-#include "connectioncontext_interface.h"
+#include "qdbusxml2cpp_manager_interface.h"
+#include "qdbusxml2cpp_net_interface.h"
+#include "qdbusxml2cpp_sim_interface.h"
+#include "qdbusxml2cpp_stk_interface.h"
+#include "qdbusxml2cpp_connectionmanager_interface.h"
+#include "qdbusxml2cpp_connectioncontext_interface.h"
 
 #include <statefs/provider.hpp>
 #include <statefs/property.hpp>

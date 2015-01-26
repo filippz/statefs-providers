@@ -1,0 +1,11 @@
+/** @file main.dox
+    Statefs properties main page
+    @brief Statefs properties
+*/
+
+/** @mainpage Documentation
+
+    @ref statefs_properties
+    
+    @defgroup statefs_properties State Properties
+*/

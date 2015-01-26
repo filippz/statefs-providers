@@ -25,7 +25,7 @@
  */
 
 #include "provider_ofono.hpp"
-#include "dbus_types.hpp"
+#include "qdbusxml2cpp_dbus_types.hpp"
 #include <qtaround/dbus.hpp>
 
 #include <math.h>

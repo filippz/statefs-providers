@@ -17,16 +17,16 @@ set(SVC_IF net.connman.service.xml)
 set(TEC_IF net.connman.technology.xml)
 set(ALL_IF ${MGR_IF} ${SVC_IF} ${TEC_IF})
 set_source_files_properties(${ALL_IF}
-  PROPERTIES INCLUDE dbus_types.hpp
+  PROPERTIES INCLUDE qdbusxml2cpp_dbus_types.hpp
   )
 set_source_files_properties(${ALL_IF}
   PROPERTIES NO_NAMESPACE TRUE
   )
 
 
-qt5_add_dbus_interface(SRC ${MGR_IF} manager_interface)
-qt5_add_dbus_interface(SRC ${SVC_IF} service_interface)
-qt5_add_dbus_interface(SRC ${TEC_IF} technology_interface)
+qt5_add_dbus_interface(SRC ${MGR_IF} qdbusxml2cpp_manager_interface)
+qt5_add_dbus_interface(SRC ${SVC_IF} qdbusxml2cpp_service_interface)
+qt5_add_dbus_interface(SRC ${TEC_IF} qdbusxml2cpp_technology_interface)
 # qt5_wrap_cpp(STATEFS_QT_SRC ${STATEFS_QT_HEADERS})
 
 add_library(provider-${SELF} SHARED

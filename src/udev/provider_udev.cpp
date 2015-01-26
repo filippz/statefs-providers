@@ -255,6 +255,39 @@ class BatteryNs : public statefs::Namespace
 {
 public:
 
+    /**
+     * @addtogroup statefs_properties
+     *
+     * @section battery_ns Battery namespace properties:
+     *
+     * - ChargePercentage [0, 100] - battery charge percentage
+     *
+     * - OnBattery [0, 1] - is charger disconnected
+     *
+     * - IsCharging [0, 1] - is battery really charging (gets power)
+     *
+     * - LowBattery [0, 1] - is battery level below low battery
+     *   threshold (defined by BATTERY_LOW_LIMIT) environment variable
+     *
+     * - TimeUntilLow (sec) - approx. time until battery will be empty
+     *
+     * - TimeUntilFull (sec) - approx. time until battery will be charged
+     *
+     * - Temperature (integer, °C * 10) - battery zone temperature if provided
+     *
+     * - Power (integer, mW) - average power consumed during several
+     *   last measurements (positive - charging)
+     *
+     * - State (string) [unknown, charging, discharging, full, low,
+     *    empty] - battery state
+     *
+     * - Voltage (uV) - battery voltage
+     *
+     * - Current (uA) - battery current (positive - charging)
+     *
+     * - Charger (string) [usb, dcp, unknown] - charger type ("" - if
+     *   absent)
+     */
     enum class Prop {
         ChargePercentage, Capacity, OnBattery, LowBattery
             , TimeUntilLow, TimeUntilFull, IsCharging, Temperature

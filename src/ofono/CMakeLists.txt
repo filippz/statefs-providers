@@ -20,18 +20,18 @@ set(CONMGR_IF org.ofono.connectionmanager.xml)
 set(CONCXT_IF org.ofono.connectioncontext.xml)
 set(ALL_IF ${MGR_IF} ${NET_IF} ${SIM_IF} ${CONMGR_IF} ${CONCXT_IF})
 set_source_files_properties(${ALL_IF}
-  PROPERTIES INCLUDE dbus_types.hpp
+  PROPERTIES INCLUDE qdbusxml2cpp_dbus_types.hpp
   )
 set_source_files_properties(${ALL_IF}
   PROPERTIES NO_NAMESPACE TRUE
   )
 
-qt5_add_dbus_interface(SRC ${MGR_IF} manager_interface)
-qt5_add_dbus_interface(SRC ${NET_IF} net_interface)
-qt5_add_dbus_interface(SRC ${SIM_IF} sim_interface)
-qt5_add_dbus_interface(SRC ${STK_IF} stk_interface)
-qt5_add_dbus_interface(SRC ${CONMGR_IF} connectionmanager_interface)
-qt5_add_dbus_interface(SRC ${CONCXT_IF} connectioncontext_interface)
+qt5_add_dbus_interface(SRC ${MGR_IF} qdbusxml2cpp_manager_interface)
+qt5_add_dbus_interface(SRC ${NET_IF} qdbusxml2cpp_net_interface)
+qt5_add_dbus_interface(SRC ${SIM_IF} qdbusxml2cpp_sim_interface)
+qt5_add_dbus_interface(SRC ${STK_IF} qdbusxml2cpp_stk_interface)
+qt5_add_dbus_interface(SRC ${CONMGR_IF} qdbusxml2cpp_connectionmanager_interface)
+qt5_add_dbus_interface(SRC ${CONCXT_IF} qdbusxml2cpp_connectioncontext_interface)
 # qt5_wrap_cpp(STATEFS_QT_SRC ${STATEFS_QT_HEADERS})
 
 add_library(provider-${SELF} SHARED
