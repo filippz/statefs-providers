@@ -760,27 +760,20 @@ void Monitor::notify()
             set<Prop::TimeToFull>(0);
         } else {
             de = denergy_.average();
+            // hour - 3600s
             auto et = de != 0 ? (energy_full_ - enow) / de * 360 / 100 : 0;
             set<Prop::TimeToLow>(0);
             set<Prop::TimeToFull>(et);
         }
         is_energy_changed = true;
-        set<Prop::Power>(de);
+        set<Prop::Power>(-de);
     };
 
     auto process_energy = [this](long enow) {
-        // log.debug("Energy -> ", enow);
-        // auto sec = dt;
-        // log.debug("DT=", sec, "s");
-        // if (!sec)
-        //     return;
-
-        // auto de = (enow - ewas) / sec;
         set_battery_prop<P::Capacity>((double)enow / energy_full_ * 100);
-        // process_de(de);
     };
 
-    auto tmp_process_percentage = [this, &is_bat_low](long v) {
+    auto process_percentage = [this, &is_bat_low](long v) {
         if (v < 0 || v > 100) {
             log.warning("Do not accept percentage ", v, ", use fake");
             v = 42;
@@ -839,7 +832,7 @@ void Monitor::notify()
         (update_dt
          , process_is_online
          , process_energy
-         , tmp_process_percentage //battery_setter<P::ChargePercentage, long>()
+         , process_percentage //battery_setter<P::ChargePercentage, long>()
          , process_voltage
          , process_current
          , process_power
