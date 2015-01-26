@@ -4,6 +4,7 @@
 #include <functional>
 #include <time.h>
 #include <queue>
+#include <stdlib.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/posix/basic_descriptor.hpp>
@@ -22,6 +23,22 @@ namespace udevpp = cor::udevpp;
 using statefs::PropertyStatus;
 
 namespace statefs { namespace udev {
+
+std::string env_get(std::string const &name, std::string const &def_val)
+{
+    auto p = ::getenv(name.c_str());
+    return p ? std::string(p) : def_val;
+}
+
+long env_get(std::string const &name, long def_val, int base = 10)
+{
+    auto p = ::getenv(name.c_str());
+    try {
+        return p ? std::stol(p, nullptr, base) : def_val;
+    } catch(std::exception const &e) {
+        return def_val;
+    }
+}
 
 static std::string str_or_default(char const *v, char const *defval)
 {
@@ -524,7 +541,7 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
     , now_(state_default)
     , denergy_(6, 10)
     , is_actual_(false)
-    , low_capacity_(10) // TODO temporary hard-coded
+    , low_capacity_(env_get("BATTERY_LOW_LIMIT", 10))
     {
         log.debug("New monitor");
         is_timer_allowed_.test_and_set(std::memory_order_acquire);
