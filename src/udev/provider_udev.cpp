@@ -631,7 +631,7 @@ private:
     asio::posix::stream_descriptor blanked_stream_;
     asio::deadline_timer timer_;
     SystemState system_;
-    std::atomic_flag is_timer_allowed_;
+    bool is_timer_allowed_;
 };
 
 using std::make_tuple;
@@ -915,7 +915,7 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
     , timer_(io)
 {
     log.debug("New monitor");
-    is_timer_allowed_.test_and_set(std::memory_order_acquire);
+    is_timer_allowed_ = true;
 }
 
 void Monitor::run()
@@ -947,7 +947,7 @@ void Monitor::monitor_events()
             return;
         }
         log.debug("Cancel timer");
-        is_timer_allowed_.clear(std::memory_order_release);
+        is_timer_allowed_ = false;
         timer_.cancel();
         //before_enumeration();
         on_device(mon_.device(root_));
@@ -956,7 +956,6 @@ void Monitor::monitor_events()
         monitor_events();
     };
 
-    //is_timer_allowed_.test_and_set(std::memory_order_acquire);
     monitor_timer();
 
     using namespace std::placeholders;
@@ -978,7 +977,7 @@ void Monitor::monitor_screen(TimerAction timer_action)
             return;
         }
         log.debug("Cancel timer");
-        is_timer_allowed_.clear(std::memory_order_release);
+        is_timer_allowed_ = false;
         timer_.cancel();
         char buf[4];
         lseek(blanked_stream_.native_handle(), 0, SEEK_SET);
@@ -994,7 +993,6 @@ void Monitor::monitor_screen(TimerAction timer_action)
         } else {
             log.debug("Wrong read from screen?:", len);
         }
-        //is_timer_allowed_.test_and_set(std::memory_order_acquire);
         monitor_screen(RestartTimer);
     };
 
@@ -1136,8 +1134,9 @@ void Monitor::monitor_timer()
     auto handler = [this](boost::system::error_code ec) {
         log.debug("Timer event");
         if (ec == asio::error::operation_aborted) {
-            if (!is_timer_allowed_.test_and_set(std::memory_order_acquire)) {
+            if (!is_timer_allowed_) {
                 log.debug("Timer is cancelled from Monitor");
+                is_timer_allowed_ = true; // allow next
                 return;
             }
         }
