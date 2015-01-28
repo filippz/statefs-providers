@@ -920,17 +920,14 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
 
 void Monitor::run()
 {
-    auto blanked_fd = try_open_in_property("Screen.Blanked");
-    if (blanked_fd.is_valid())
-        blanked_stream_.assign(blanked_fd.release());
-    auto on_device_initial = [this](udevpp::Device &&dev)
-        {
-            //auto t = str_or_default(dev.attr("type"), "");
-            // if (t == "Battery")
-            //     battery_.setup(dev);
-            // else
-            on_device(std::move(dev));
-        };
+    if (env_get("STATEFS_UDEV_MONITOR_SCREEN", 1)) {
+        auto blanked_fd = try_open_in_property("Screen.Blanked");
+        if (blanked_fd.is_valid())
+            blanked_stream_.assign(blanked_fd.release());
+    }
+    auto on_device_initial = [this](udevpp::Device &&dev) {
+        on_device(std::move(dev));
+    };
 
     for_each_power_device(on_device_initial);
     notify(true);
