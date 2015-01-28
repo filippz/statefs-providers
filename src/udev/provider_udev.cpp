@@ -576,6 +576,8 @@ public:
 
 private:
 
+    void start_monitor_blanked();
+
     template <BatteryNs::Prop Id, typename T>
     void set_battery_prop(T const &v)
     {
@@ -918,17 +920,31 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
     is_timer_allowed_ = true;
 }
 
+void Monitor::start_monitor_blanked()
+{
+    static const std::string blanked_name = "Screen.Blanked";
+    if (env_get("STATEFS_UDEV_MONITOR_SCREEN", 1)) {
+        log.info("Monitor screen blanked state");
+        auto blanked_fd = try_open_in_property(blanked_name);
+        if (blanked_fd.is_valid()) {
+            if (blanked_stream_.is_open()) {
+                log.info("Reopening screen descriptor");
+                blanked_stream_.close();
+            }
+            blanked_stream_.assign(blanked_fd.release());
+        }
+    } else {
+        log.warning("Can't open", blanked_name);
+    }
+}
+
 void Monitor::run()
 {
-    if (env_get("STATEFS_UDEV_MONITOR_SCREEN", 1)) {
-        auto blanked_fd = try_open_in_property("Screen.Blanked");
-        if (blanked_fd.is_valid())
-            blanked_stream_.assign(blanked_fd.release());
-    }
     auto on_device_initial = [this](udevpp::Device &&dev) {
         on_device(std::move(dev));
     };
 
+    start_monitor_blanked();
     for_each_power_device(on_device_initial);
     notify(true);
     monitor_events();
@@ -992,6 +1008,7 @@ void Monitor::monitor_screen(TimerAction timer_action)
             update_info();
         } else {
             log.debug("Wrong read from screen?:", len);
+            start_monitor_blanked();
         }
         monitor_screen(RestartTimer);
     };
