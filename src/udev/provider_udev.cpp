@@ -765,13 +765,14 @@ void BatteryInfo::set_denergy_now(long de)
             denergy_max_ = - de;
         calculate_power_limits();
         log.debug("dEavg=", de);
-        auto et = de != 0 ? - enow / de * 360 / 100 : 0;
+        // hour - 3600s
+        auto et = de < 0 ? - enow / de * 360 / 100 : 0;
         time_to_low.set(et);
         time_to_full.set(0);
     } else {
         de = denergy_.average();
         // hour - 3600s
-        auto et = de != 0 ? (energy_full_ - enow) / de * 360 / 100 : 0;
+        auto et = de > 0 ? (energy_full_ - enow) / de * 360 / 100 : 0;
         time_to_low.set(0);
         time_to_full.set(et);
     }
