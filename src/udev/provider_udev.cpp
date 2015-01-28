@@ -22,23 +22,19 @@ class ChangingValue
 {
 public:
     ChangingValue(T const & initial)
-        : prev_(initial)
-        , now_(initial)
+        : prev_(initial), now_(initial)
     {}
 
     ChangingValue(T && initial)
-        : prev_(std::move(initial))
-        , now_(prev_)
+        : prev_(std::move(initial)), now_(prev_)
     {}
 
     ChangingValue(ChangingValue<T> && from)
-        : prev_(std::move(from.prev_))
-        , now_(std::move(from.now_))
+        : prev_(std::move(from.prev_)), now_(std::move(from.now_))
     {}
 
     ChangingValue(ChangingValue<T> const &from)
-        : prev_(from.prev_)
-        , now_(from.now_)
+        : prev_(from.prev_), now_(from.now_)
     {}
 
     ChangingValue& operator = (ChangingValue<T> const &from)
@@ -59,19 +55,11 @@ public:
 
     T last() { return now_; }
     T const & last() const { return now_; }
-
     T previous() { return prev_; }
     T const & previous() const { return prev_; }
 
-    void set(T const &v)
-    {
-        now_ = v;
-    }
-
-    void set(T &&v)
-    {
-        now_ = std::move(v);
-    }
+    void set(T const &v) { now_ = v; }
+    void set(T &&v) { now_ = std::move(v); }
 
     template <typename FnT>
     void on_changed(FnT fn)
@@ -87,10 +75,7 @@ public:
             fn(prev_, now_);
     }
 
-    void update()
-    {
-        prev_ = now_;
-    }
+    void update() { prev_ = now_; }
 
 private:
     T prev_;
@@ -573,17 +558,6 @@ public:
     Monitor(asio::io_service &io, BatteryNs *);
     void run();
 
-    // BasicSource::source_type temperature_source() const
-    // {
-    //     // TODO
-    //     return [this]() {
-    //         std::string res("-1");
-    //         if (battery_)
-    //             res = str_or_default(battery_->attr("temp"), "-1");
-    //         return res;
-    //     };
-    // }
-
 private:
 
     void start_monitor_blanked();
@@ -736,16 +710,16 @@ void ChargingInfo::update_online_status()
     auto check_online = [&found_online]
         (std::pair<std::string, ChargerInfo> const &nv) {
         auto const &info = nv.second;
-        log.debug("Charger ", nv.first, ", type=", get_chg_type_name(info.type)
-                  , "is_online?=", info.online);
+        log.debug("Charger ", nv.first, " type=", get_chg_type_name(info.type)
+                  , " is_online?=", info.online);
         if (info.online)
             found_online.push(info.type);
     };
     log.debug("Check chargers state");
     std::for_each(chargers_.begin(), chargers_.end(), check_online);
     is_online.set(found_online.size() > 0);
-    if (is_online.last())
-        log.debug("There is online charger:", get_chg_type_name(found_online.top()));
+    if (is_online.changed())
+        log.info("There is online charger:", get_chg_type_name(found_online.top()));
     charger_type.set(is_online.last() ? found_online.top() : ChargerType::Absent);
 }
 
@@ -812,7 +786,7 @@ void BatteryInfo::update(udevpp::Device &&from_dev)
             log.warning("Instead of previous battery ", dev_->path());
         setup(std::move(from_dev));
     } else {
-        *dev_ = std::move(from_dev);
+        dev_.reset(new udevpp::Device(std::move(from_dev)));
     }
     if (!dev_) {
         log.error("Battery is null, do not update battery info");
@@ -1093,7 +1067,7 @@ void Monitor::notify(bool is_initial)
     charging_.calculate(battery_, is_initial);
     typedef BatteryNs::Prop P;
 
-    auto get_is_charging = [&charging_](long p)
+    auto get_is_charging = [this](long p)
     {
         return charging_.charger_type.last() != ChargerType::Absent
             && charging_.state.last() == ChargingState::Charging
@@ -1171,13 +1145,8 @@ void Monitor::notify(bool is_initial)
 
 void Monitor::update_info()
 {
-    // if (!(charger_ && battery_)) {
     using namespace std::placeholders;
     for_each_power_device(std::bind(&Monitor::on_device, this, _1));
-    // } else {
-    //     on_charger(*charger_);
-    //     on_battery(*battery_);
-    // }
     notify();
 }
 
