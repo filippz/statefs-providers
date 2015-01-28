@@ -560,6 +560,11 @@ class Monitor
     enum TimerAction {
         RestartTimer, NoTimerAction
     };
+
+    enum class TimerStatus {
+        Idle, Scheduled, Cancelled
+    };
+
 public:
     enum class BatState {
         Unknown, Charging, Discharging, Full, Low
@@ -626,6 +631,7 @@ private:
     void update_info();
     void monitor_timer();
     void monitor_screen(TimerAction);
+    void timer_cancel();
 
     BatteryNs *bat_ns_;
     asio::io_service &io_;
@@ -638,7 +644,7 @@ private:
     asio::posix::stream_descriptor blanked_stream_;
     asio::deadline_timer timer_;
     SystemState system_;
-    bool is_timer_allowed_;
+    TimerStatus timer_status_;
 };
 
 using std::make_tuple;
@@ -920,9 +926,9 @@ Monitor::Monitor(asio::io_service &io, BatteryNs *bat_ns)
         }())
     , blanked_stream_(io)
     , timer_(io)
+    , timer_status_(TimerStatus::Idle)
 {
     log.debug("New monitor");
-    is_timer_allowed_ = true;
 }
 
 void Monitor::start_monitor_blanked()
@@ -969,6 +975,15 @@ void SystemState::on_event(SystemState::Event e, boost::system::error_code ec)
               , " is ", ec);
 }
 
+void Monitor::timer_cancel()
+{
+    if (timer_status_ == TimerStatus::Scheduled) {
+        log.debug("Cancel timer");
+        timer_status_ = TimerStatus::Cancelled;
+        timer_.cancel();
+    }
+}
+
 void Monitor::monitor_events()
 {
     using boost::system::error_code;
@@ -980,9 +995,7 @@ void Monitor::monitor_events()
             io_.stop();
             return;
         }
-        log.debug("Cancel timer");
-        is_timer_allowed_ = false;
-        timer_.cancel();
+        timer_cancel();
         //before_enumeration();
         on_device(mon_.device(root_));
         after_enumeration();
@@ -1010,12 +1023,17 @@ void Monitor::monitor_screen(TimerAction timer_action)
             log.error("Event is error", ec);
             return;
         }
-        log.debug("Cancel timer");
-        is_timer_allowed_ = false;
-        timer_.cancel();
+        timer_cancel();
         char buf[4];
         lseek(blanked_stream_.native_handle(), 0, SEEK_SET);
-        auto len = blanked_stream_.read_some(asio::buffer(buf, sizeof(buf)));
+        std::size_t len = 0;
+        try {
+            len = blanked_stream_.read_some(asio::buffer(buf, sizeof(buf)));
+        } catch (std::exception const &e) {
+            // can happen during deep sleep, try to reopen
+            auto msg = e.what();
+            log.warning("Can't read data from blanked: ", msg ? msg : "?");
+        }
         if (len && len < sizeof(buf)) { // expecting values [0, 1]
             buf[len] = 0;
             bool is_on = (::atoi(buf) == 0);
@@ -1168,10 +1186,16 @@ void Monitor::monitor_timer()
     log.debug("Monitor Timer");
     auto handler = [this](boost::system::error_code ec) {
         system_.on_event(SystemState::Event::Timer, ec);
-        if (ec == asio::error::operation_aborted) {
-            if (!is_timer_allowed_) {
+        if (ec) {
+            if (ec == asio::error::operation_aborted) {
+                // if (timer_status_ == TimerStatus::Cancelled) {
                 log.debug("Timer is cancelled from Monitor");
-                is_timer_allowed_ = true; // allow next
+                timer_status_ = TimerStatus::Idle;
+                return;
+                // }
+            } else {
+                log.critical("Timer error event ", ec);
+                io_.stop();
                 return;
             }
         }
@@ -1188,6 +1212,7 @@ void Monitor::monitor_timer()
         }
     };
 
+    timer_status_ = TimerStatus::Scheduled;
     timer_.expires_from_now(boost::posix_time::seconds(dtimer_sec_));
     timer_.async_wait(wrapper);
 }
