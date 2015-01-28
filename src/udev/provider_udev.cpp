@@ -543,9 +543,14 @@ struct SystemState
     enum class Screen { Unknown, On, Off, Lost };
     SystemState()
         : screen_(Screen::Unknown)
+        , events_count_(0)
     {}
 
+    enum class Event { Timer = 0, Screen, Device, Last_ = Device };
+    void on_event(Event, boost::system::error_code ec);
+
     Screen screen_;
+    long events_count_;
 };
 
 class Monitor
@@ -951,12 +956,25 @@ void Monitor::run()
     monitor_screen(NoTimerAction);
 }
 
+void SystemState::on_event(SystemState::Event e, boost::system::error_code ec)
+{
+    static const char * names[] = {
+        "Timer", "Screen", "Device"
+    };
+    static_assert(sizeof(names)/sizeof(names[0])
+                  == cor::enum_size<SystemState::Event>()
+                  , "Check event names");
+    log.debug("Event #", ++events_count_
+              , " from ", names[cor::enum_index(e)]
+              , " is ", ec);
+}
+
 void Monitor::monitor_events()
 {
     using boost::system::error_code;
     log.debug("Mon Events");
     auto on_event = [this](error_code ec, std::size_t) {
-        log.debug("Got event");
+        system_.on_event(SystemState::Event::Device, ec);
         if (ec) {
             log.error("Event is error", ec, ", stopping I/O");
             io_.stop();
@@ -986,7 +1004,7 @@ void Monitor::monitor_screen(TimerAction timer_action)
 {
     using boost::system::error_code;
     auto on_screen = [this](error_code ec, std::size_t) {
-        log.debug("Got screen event");
+        system_.on_event(SystemState::Event::Screen, ec);
         if (ec) {
             system_.screen_ = SystemState::Screen::Lost;
             log.error("Event is error", ec);
@@ -1149,7 +1167,7 @@ void Monitor::monitor_timer()
 {
     log.debug("Monitor Timer");
     auto handler = [this](boost::system::error_code ec) {
-        log.debug("Timer event");
+        system_.on_event(SystemState::Event::Timer, ec);
         if (ec == asio::error::operation_aborted) {
             if (!is_timer_allowed_) {
                 log.debug("Timer is cancelled from Monitor");
