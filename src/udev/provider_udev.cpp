@@ -203,7 +203,7 @@ static inline std::string statefs_attr(char const *v)
 }
 
 enum class BatteryLevel {
-    Unknown = 0, Empty, Low, Normal, Last_ = Normal
+    First_ = 0, Unknown = First_, Empty, Low, Normal, Last_ = Normal
 };
 
 static char const * get_level_name(BatteryLevel t)
@@ -218,7 +218,7 @@ static char const * get_level_name(BatteryLevel t)
 }
 
 enum class ChargingState {
-    Unknown = 0, Charging, Discharging, Idle, Last_ = Idle
+    First_ = 0, Unknown = First_, Charging, Discharging, Idle, Last_ = Idle
 };
 
 static char const * get_chg_state_name(ChargingState v)
@@ -233,7 +233,7 @@ static char const * get_chg_state_name(ChargingState v)
 }
 
 enum class ChargerType {
-    Absent = 0, DCP, CDP, USB, Mains, Unknown, Last_ = Unknown
+    First_ = 0, Absent = First_, DCP, CDP, USB, Mains, Unknown, Last_ = Unknown
 };
 
 static char const * get_chg_type_name(ChargerType t)
@@ -531,7 +531,9 @@ struct SystemState
         , events_count_(0)
     {}
 
-    enum class Event { Timer = 0, Screen, Device, Last_ = Device };
+    enum class Event { First_ = 0
+            , Timer = First_, Screen, Device
+            , Last_ = Device };
     void on_event(Event, boost::system::error_code ec);
 
     Screen screen_;

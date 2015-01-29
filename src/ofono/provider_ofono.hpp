@@ -118,8 +118,8 @@ public:
     typedef std::function<void(Bridge*, QVariant const&)> property_action_type;
     typedef std::map<QString, property_action_type> property_map_type;
 
-    enum class Status {
-        Offline, Registered, Searching, Denied, Unknown, Roaming
+    enum class Status { First_ = 0, Offline = First_
+            , Registered, Searching, Denied, Unknown, Roaming
             , Last_ = Roaming
             };
 
