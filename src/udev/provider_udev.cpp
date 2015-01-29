@@ -715,12 +715,16 @@ void ChargingInfo::update_online_status()
         if (info.online)
             found_online.push(info.type);
     };
-    log.debug("Check chargers state");
+    log.debug("Processing chargers");
     std::for_each(chargers_.begin(), chargers_.end(), check_online);
-    is_online.set(found_online.size() > 0);
-    if (is_online.changed())
-        log.info("There is online charger:", get_chg_type_name(found_online.top()));
-    charger_type.set(is_online.last() ? found_online.top() : ChargerType::Absent);
+    charger_type.set(found_online.size() > 0
+                     ? found_online.top()
+                     : ChargerType::Absent);
+    if (charger_type.changed()) {
+        auto t = charger_type.last();
+        log.info("Charger changed:" , get_chg_type_name(t));
+        is_online.set(t != ChargerType::Absent);
+    }
 }
 
 void ChargingInfo::calculate(BatteryInfo &battery, bool is_recalculate)
